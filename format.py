@@ -12,7 +12,7 @@ class TimeDelta:
         return TimeDelta(self.dt / x)
 
     def dotted(self):
-        return TimeDelta(self.dt * 2 / 3)
+        return TimeDelta(self.dt * 3 / 2)
 
     def __repr__(self):
         return 'TimeDelta(%r)' % self.dt
@@ -140,7 +140,7 @@ def gen_tikz(sections):
         for note in section.notes:
             x1 = note.startTime + i
             y1 = (math.log(note.pitch.freq) - math.log(Pitch.name_to_freq('C3')))
-            x2 = x1 + note.duration.dt
+            x2 = x1 + note.duration.dt - 0.01
             y2 = y1 + 0.05
             print r'    \draw[fill=gray] ({x1}, {y1}) rectangle ({x2}, {y2});'.format(
                     x1=float(x1), y1=float(y1), x2=float(x2), y2=float(y2))
@@ -154,7 +154,7 @@ def gen_tikz(sections):
                 print r'    \draw[dotted] ({x1}, {y1}) -- (0, {y1});'.format(
                         x1=float(x1), y1=float(y1), x2=float(x2), y2=float(y2), 
                         name=name, freq=note.pitch.freq)
-        print r'    \draw[dotted, thick, color=gray] ({x}, 0) -- ({x}, 2);'.format(x=i)
+        print r'    \draw[dotted, thick, color=gray] ({x}, 0) -- ({x}, 2);'.format(x=i + 1)
 
 
     print foot
