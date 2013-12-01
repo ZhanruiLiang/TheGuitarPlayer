@@ -1,0 +1,10 @@
+how to switch instrument:
+http://www.lilypond.org/doc/v2.17/Documentation/notation/midi-instruments#midi-instruments
+
+convert using timidity++
+
+  % timidity -Ov sample.midi
+
+play using timidity
+
+  % timidity sample.midi

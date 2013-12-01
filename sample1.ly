@@ -6,7 +6,8 @@ song = {
   \clef treble
   \key d \major
   \time 4/4
-  \tempo "Allegro"
+  % \tempo "Allegro"
+  \tempo "Allegro" 4 = 110
 
   \partial 8 a'8 |
   <<

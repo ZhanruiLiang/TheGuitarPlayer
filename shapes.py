@@ -61,6 +61,7 @@ class WiredCylinder(Shape):
         self.slices = slices
 
     def compile(self):
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
         A = np.linspace(0, np.pi * 2, self.slices, endpoint=True)
         X = np.cos(A) * self.radius
         Y = np.sin(A) * self.radius
@@ -82,6 +83,7 @@ class WiredCylinder(Shape):
             for x, y in zip(X, Y):
                 glVertex3f(x, y, -h)
                 glVertex3f(x, y, h)
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
 class AxisSystem(Shape):
     def __init__(self, color, radius):
@@ -93,26 +95,18 @@ class AxisSystem(Shape):
         d = 0.05 * r
         h = 0.4 * d
         b = .9
-        with utils.glPrimitive(GL_LINES):
-            # x axis
-            glColor4f(*self.color)
-            glVertex3f(0., 0., 0.);glVertex3f(r, 0., 0.)
-            glVertex3f(0., 0., 0.);glVertex3f(0., r, 0.)
-            glVertex3f(0., 0., 0.);glVertex3f(0., 0., r)
 
+        colors = [(b, .2, .2), (.2, b, .2), (.2, .2, b)]
+        vertices = [(r, 0., 0.), (r - d, h, -h), (r - d, -h, h),
+                (r, 0., 0.), (r - d, h, h), (r - d, -h, -h)]
+        replaces = [(0, 1, 2), (2, 0, 1), (1, 2, 0)]
+        with utils.glPrimitive(GL_LINES):
+            for color, replace in zip(colors, replaces):
+                glColor3f(*color)
+                glVertex3f(0., 0., 0.)
+                glVertex3f(*[(r, 0., 0.)[replace[i]] for i in range(3)])
         with utils.glPrimitive(GL_TRIANGLES):
-            # x arrow
-            glColor3f(b, .2, .2)
-            glVertex3f(r, 0., 0.)
-            glVertex3f(r - d, h, h)
-            glVertex3f(r - d, -h, -h)
-            # y arrow
-            glColor3f(.2, b, .2)
-            glVertex3f(0., r, 0.)
-            glVertex3f(h, r - d, h)
-            glVertex3f(-h, r - d, -h)
-            # z arrow
-            glColor3f(.2, .2, b)
-            glVertex3f(0., 0., r)
-            glVertex3f(h, h, r - d)
-            glVertex3f(-h, -h, r - d)
+            for color, replace in zip(colors, replaces):
+                glColor3f(*color)
+                for v in vertices:
+                    glVertex3f(*[v[replace[i]] for i in range(3)])

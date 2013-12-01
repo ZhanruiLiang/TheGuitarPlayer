@@ -4,11 +4,12 @@ from shapes import WiredCylinder, AxisSystem
 import utils
 from pyglet.gl import *
 from display import Display, SubWindow
-import ctypes
 import testbase
-import solver
+import fretboard
 
 # All angles are in radius
+
+x0, y0, z0 = .06, 0., -.06
 
 def mat_rotate_z(mat, angle):
     mat1 = mat.copy()
@@ -18,19 +19,7 @@ def mat_rotate_z(mat, angle):
     s = np.sin(angle)
     mat1[0:3, 0] = ix * c + iy * s
     mat1[0:3, 1] = ix * (-s) + iy * c
-    # mat1[0:2, 0:2] = np.matrix([[c, -s], [s, c]]) * mat1[0:2, 0:2]
     return mat1
-
-M16 = ctypes.c_float * 16
-
-def npmat_to_glmat(mat):
-    return M16(*np.array(mat.transpose()).reshape(16))
-
-def extract_pos(mat):
-    return np.array(mat[0:4, 3]).reshape(4)
-
-def extract_pos3(mat):
-    return np.array(mat[0:3, 3] / mat[3, 3]).reshape(3)
 
 class Link:
     def __init__(self, parent, child):
@@ -47,7 +36,7 @@ class Joint:
 
     @staticmethod
     def make_mat(pos3, angle):
-        mat = np.matrix(np.eye(4))
+        mat = np.eye(4)
         mat[0, 3] = pos3[0]
         mat[1, 3] = pos3[1]
         mat[2, 3] = pos3[2]
@@ -94,15 +83,15 @@ class Joint:
 
     @property
     def globalPos(self):
-        return extract_pos(self.globalMat)
+        return utils.extract_pos(self.globalMat)
 
     @property
     def localPos3(self):
-        return extract_pos3(self.localMat)
+        return utils.extract_pos3(self.localMat)
 
     @property
     def globalPos3(self):
-        return extract_pos3(self.globalMat)
+        return utils.extract_pos3(self.globalMat)
 
     @property
     def angle(self):
@@ -113,6 +102,18 @@ class Joint:
         self._angle = angle
         self._localMat = mat_rotate_z(self._localMatBase, angle)
         self.update()
+
+class JointDOF2(Joint):
+    def __init__(self, name, localMat, subJoints):
+        matY = np.array([
+            [1, 0, 0, 0],
+            [0, 0, 1, 0],
+            [0, -1, 0, 0],
+            [0, 0, 0, 1]
+            ])
+        matYinv = np.linalg.inv(matY)
+        super().__init__(name+'y', np.dot(localMat, matY), [
+            Joint(name+'z', matYinv, subJoints)])
 
 class ShapeSprite:
     def __init__(self, shape):
@@ -131,7 +132,7 @@ class JointSprite:
     def draw(self):
         with utils.glPreserveMatrix():
             mat = self.joint.localMat
-            glMultMatrixf(npmat_to_glmat(mat))
+            glMultMatrixf(utils.npmat_to_glmat(mat))
             for shape in self._shapes:
                 shape.draw()
             for link in self.links:
@@ -142,7 +143,7 @@ class JointSprite:
                 link.child.draw()
 
 def setup_windows():
-    scale1 = .1
+    scale1 = 10
     testbase.display.subWindows = [
             SubWindow('From Z', 
                 pos=(0, 0), size=(.5, .5),
@@ -157,10 +158,167 @@ def setup_windows():
             SubWindow('Perspective', 
                 pos=(.5, 0), size=(.5, 1),
                 eye=(5, 5, 5), center=(0, 0, 0), up=(0, 1, 0),
-                scale=.2,
+                scale=3 * scale1,
                 ortho=False,
             ),
     ]
+
+norm = lambda x:np.sqrt(x.dot(x))
+
+class SimpleSolver:
+    """
+    positions: vector of size m
+    targetPoss: vector of size m
+    angles: vector of size n
+    """
+    def __init__(self):
+        self.joints = []
+        self.targets = []
+        self.cTargets = []
+        self.rTargets = []
+
+    def set_joints(self, rootJoint):
+        def search_all(joint):
+            if joint.links:
+                self.joints.append(joint)
+            for link in joint.links:
+                search_all(link.child)
+        search_all(rootJoint)
+        self.n = len(self.joints)
+
+    def set_target_pos(self, jointPosPairs):
+        """
+        @param jointPosPairs: [(str, Pos3D)], a list of (jointName, effectorPos) 
+            pairs.
+        """
+        self.m = m = 3 * len(jointPosPairs)
+        self.targetPoss = T = np.zeros(m, dtype=np.double)
+        for i, (jname, pos) in enumerate(jointPosPairs):
+            self.targets.append(Joint.get(jname))
+            T[3*i:3*i+3] = pos
+
+    def set_constraint_angles(self, jointAngleWeights):
+        pass
+
+    def set_reference_angles(self, jointAngleWeights):
+        pass
+
+    @staticmethod
+    def is_parent(j1, j2):
+        while j2:
+            if j2 is j1:
+                return True
+            j2 = j2.parent
+        return False
+
+    def make_jacobian(self):
+        """
+        make a m x n Jacobian matrix, where m is the number of effectors
+        and n is the number of angles.
+
+        J(i, j) = D(position(i), angle(j)) = norm(j) x (p(i) - p(j))
+        """
+        J = np.array(np.zeros((self.m, self.n), dtype=np.double))
+        js = self.joints
+        P = self.positions
+        for i in range(0, self.m, 3):
+            for j in range(self.n):
+                if self.is_parent(js[j], self.targets[i//3]):
+                    J[i:i+3, j] = np.cross(js[j].norm3, P[i:i+3] - js[j].globalPos3)
+                else:
+                    J[i:i+3, j] = 0
+        return J
+
+    def start_solve(self):
+        self.angles = np.array([x.angle for x in self.joints], dtype=np.double)
+        self._ended = not self.targets
+        self.iterCount = 0
+        self.ds = []
+
+    def is_ended(self):
+        return self._ended
+
+    def plot(self):
+        import pylab
+        pylab.plot(self.ds)
+        pylab.show()
+
+    def make_delta_angles(self):
+        J = self.make_jacobian()
+        # solve : J dA = dP = T - S for dA
+        e = self.clamp_err(self.targetPoss - self.positions)
+        deltaAngles = np.linalg.lstsq(J, e)[0]
+        # print('--------i:', self.iterCount)
+        # print('globalPos:', np.array([x.globalPos3 for x in self.joints]))
+        # print('norms:', np.array([x.norm3 for x in self.joints]))
+        # print('e:', e)
+        # print('J:')
+        # print(J)
+        # print('dA:', deltaAngles)
+        # print('close?:', np.allclose(np.dot(J, deltaAngles), e))
+        return self.clamp_step(deltaAngles)
+
+    d1 = .005 # stop thresold
+    d2 = .05 # step length
+    d3 = .02 # error clamping value
+
+    def clamp_err(self, e):
+        d3 = self.d3
+        for i in range(0, self.m, 3):
+            w = e[i:i+3]
+            wL = norm(w)
+            if wL > d3:
+                e[i:i+3] = d3 / wL * w
+        return e
+
+    def clamp_step(self, dA):
+        d = norm(dA)
+        if d > self.d2:
+            return self.d2 / norm(dA) * dA
+        else:
+            return dA
+
+    def step(self):
+        # In the following comment:
+        #   A stands for "angle"
+        #   P stands for "position"
+        #   T stands for "target position vector"
+        #   S stands for "current position vector"
+        js = self.joints
+        self.positions = np.hstack([x.globalPos3
+            for x in self.targets])
+        d = norm(self.targetPoss - self.positions)
+        print('d:', d)
+        self.ds.append(d)
+        if d <= self.d1: 
+            self._ended = True
+            return
+        self.angles += self.make_delta_angles()
+        for joint, angle in zip(js, self.angles):
+            joint.angle = angle
+        self.iterCount += 1
+
+class DLSSolver(SimpleSolver):
+    # d2 = .05
+    k = .2
+    def make_delta_angles(self):
+        J = self.make_jacobian()
+        k2 = self.k**2
+        e = self.clamp_err(self.targetPoss - self.positions)
+        Jt = J.transpose()
+        A = np.dot(J, Jt) + k2 * np.eye(self.m)
+        f = np.linalg.solve(A, e)
+        assert np.allclose(np.dot(A, f), e)
+        return self.clamp_step(np.dot(Jt, f))
+
+class JacobianTransposeSolver(SimpleSolver):
+    def make_delta_angles(self):
+        J = self.make_jacobian()
+        e = self.clamp_err(self.targetPoss - self.positions)
+        Jt = J.transpose()
+        J1 = np.dot(np.dot(J, Jt), e)
+        a = np.dot(e, J1) / np.dot(J1, J1)
+        return self.clamp_step(a * np.dot(Jt, e))
 
 Pi = np.pi
 
@@ -205,17 +363,6 @@ def example_2():
         ]
     return root, dest
 
-class JointDOF2(Joint):
-    def __init__(self, name, localMat, subJoints):
-        matY = np.matrix([
-            [1, 0, 0, 0],
-            [0, 0, 1, 0],
-            [0, -1, 0, 0],
-            [0, 0, 0, 1]
-            ])
-        matYinv = np.linalg.inv(matY)
-        super().__init__(name+'y', np.dot(localMat, matY), [
-            Joint(name+'z', matYinv, subJoints)])
 
 def hand_example():
     def make_finger(nameSuffix, mat, L2, L3, L4):
@@ -227,26 +374,45 @@ def hand_example():
                 ])
             ])
         ])
-    L1, L2, L3, L4 = 10., 4., 3., 2.5
+    # All lengths are in meters
+    L1, L2, L3, L4 = .10, .04, .03, .025
     scales = [0, .8, 1., .9, .7]
-    HB = 8 # width
+    HB = 0.08 # width
     poss = [(), 
             (L1 * scales[1], 0, HB/2),
             (L1 * scales[2], 0, HB/6),
             (L1 * scales[3], 0, -HB/6),
             (L1 * scales[4], 0, -HB/2),
             ]
-    hand = JointDOF2('W', Joint.make_mat((0, 0, 0), Pi/6), [
+    hand = JointDOF2('W', np.array([
+        # wrist matrix
+            [0, 0, -1, .04 - x0],
+            [0, 1, 0, 0 - y0],
+            [1, 0, 0, -.12 - z0],
+            [0, 0, 0, 1],
+        ]), [
             make_finger(i, Joint.make_mat(poss[i], 0.),
                 L2 * scales[i], L3 * scales[i], L4 * scales[i])
             for i in range(1, 5)
         ])
-    dest = [
-        ('EP1', (14, 0, HB/3)),
-        ('EP2', (13, 0, HB/6)),
-        ('EP3', (16, 0, -HB/6)),
-        ('EP4', (14, 0, -HB/3)),
+    def get_pos(stringIdx, fretIdx):
+        fp = fretboard.FretPos(stringIdx, fretIdx)
+        x, y = fretSp.pos_fret_to_plane(fp)
+        return np.dot(fretSp.localMat, [x, y, 0, 1])[:3]
+    X1 = [
+        ('EP1', (6, 1)),
+        ('EP2', (2, 2)),
+        ('EP3', (3, 3)),
+        ('EP4', (1, 3)),
     ]
+    Am = [
+        ('EP1', (2, 1)),
+        ('EP2', (4, 2)),
+        ('EP3', (3, 2)),
+    ]
+    arrangment = Am
+    fretSp.set_marks([fretboard.FretPos(i, j) for (_, (i, j)) in arrangment])
+    dest = [(f, get_pos(i, j)) for (f, (i, j)) in arrangment]
     return hand, dest
 
 def solve(solver, root, dest):
@@ -256,6 +422,7 @@ def solve(solver, root, dest):
     solver.set_target_pos(dest)
     solver.start_solve()
     plotted = False
+    # plotted = True
     def update(dt):
         nonlocal plotted
         # Joint.get('MCP1y').angle += dt
@@ -269,14 +436,21 @@ def solve(solver, root, dest):
     pyglet.clock.schedule_interval(update, 1./60)
 
 if __name__ == '__main__':
-    cylinder = WiredCylinder((.2, .2, .2, 1.), .2, 1)
-    axisSystem = AxisSystem((0., 0., 0., 1.), .2)
+    cylinder = WiredCylinder((.2, .2, .2, 1.), .002, 0.01)
+    axisSystem = AxisSystem((0., 0., 0., 1.), .01)
 
     setup_windows()
-    testbase.display.add(ShapeSprite(AxisSystem((0, 0, 0, 1), 3)))
-    sol = solver.SimpleSolver()
-    # sol = solver.DLSSolver()
-    # sol = solver.JacobianTransposeSolver()
+    testbase.display.add(ShapeSprite(AxisSystem((0, 0, 0, 1), .1)))
+    fretSp = fretboard.FretBoardSprite(np.array([
+        [1, 0, 0, 0 - x0],
+        [0, 0, 1, 0 - y0],
+        [0, -1, 0, 0 - z0],
+        [0, 0, 0, 1],
+        ]), top=.06, length=.70, bottom=.08, nFrets=19)
+    testbase.display.add(fretSp)
+    sol = SimpleSolver()
+    # sol = DLSSolver()
+    # sol = JacobianTransposeSolver()
     # data = example_2()
     data = hand_example()
     solve(sol, *data)
