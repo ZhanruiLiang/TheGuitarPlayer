@@ -1,6 +1,7 @@
 import sys
 import pyglet
 from pyglet.gl import *
+import OpenGL.GL as G
 import config
 import utils
 
@@ -59,6 +60,12 @@ class Display:
         self.size = (1, 1)
         self.subWindows = []
 
+    def set_light(self):
+        R = 1
+        glLightf(GL_LIGHT0, GL_POSITION, R, 0, 0)
+        glLightf(GL_LIGHT1, GL_POSITION, 0, R, 0)
+        glLightf(GL_LIGHT2, GL_POSITION, 0, 0, R)
+
     def draw(self):
         # glViewport(0, 0, self.size[0], self.size[1])
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -69,6 +76,7 @@ class Display:
             glLoadIdentity()
             with utils.glPreserveMatrix():
                 win.set_camera()
+                self.set_light()
                 # draw sprites for this window
                 for sp in self.sprites:
                     sp.draw()
@@ -104,6 +112,13 @@ class Display:
 
         # glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
         glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+        glEnable(GL_NORMALIZE)
+        glEnable(GL_LIGHTING)
+        glEnable(GL_LIGHT0)
+        glEnable(GL_LIGHT1)
+        glEnable(GL_LIGHT2)
+
+        G.glLightfv(GL_LIGHT0, GL_DIFFUSE, (.8, .8, .8, 1.))
 
         @self.window.event
         def on_resize(width, height):

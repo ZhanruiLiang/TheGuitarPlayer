@@ -1,5 +1,5 @@
 from pyglet.gl import *
-# from OpenGL.GLUT import *
+import OpenGL.GL as G
 import numpy as np
 import utils
 
@@ -54,6 +54,7 @@ class Square(Shape):
             glVertex3f(-a, a, 0)
 
 class WiredCylinder(Shape):
+    POLYGON_MODE = GL_LINE
     def __init__(self, color, radius, height, slices=16):
         super().__init__(color)
         self.radius = radius
@@ -61,18 +62,20 @@ class WiredCylinder(Shape):
         self.slices = slices
 
     def compile(self):
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+        glPolygonMode(GL_FRONT_AND_BACK, self.POLYGON_MODE)
         A = np.linspace(0, np.pi * 2, self.slices, endpoint=True)
         X = np.cos(A) * self.radius
         Y = np.sin(A) * self.radius
         # Draw top face
         with utils.glPrimitive(GL_TRIANGLE_FAN):
+            glNormal3i(0, 0, 1)
             h = self.height / 2.
             glVertex3f(0, 0, h)
             for x, y in zip(X, Y):
                 glVertex3f(x, y, h)
         # Draw bottom face
         with utils.glPrimitive(GL_TRIANGLE_FAN):
+            glNormal3i(0, 0, -1)
             h = -self.height / 2.
             glVertex3f(0, 0, h)
             for x, y in zip(*map(reversed, (X, Y))):
@@ -80,10 +83,21 @@ class WiredCylinder(Shape):
         # Draw side faces
         with utils.glPrimitive(GL_QUAD_STRIP):
             h = self.height / 2.
+            glNormal3d(x, y, 0)
             for x, y in zip(X, Y):
                 glVertex3f(x, y, -h)
                 glVertex3f(x, y, h)
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+
+class Cylinder(WiredCylinder):
+    POLYGON_MODE = GL_FILL
+    def compile(self):
+        G.glMaterialfv(GL_FRONT, GL_DIFFUSE, self.color)
+        quad = gluNewQuadric()
+        glTranslated(0, 0, -self.height/2)
+        gluCylinder(quad, self.radius, self.radius, self.height, self.slices, 1)
+        gluDeleteQuadric(quad)
+        glTranslated(0, 0, self.height/2)
 
 class AxisSystem(Shape):
     def __init__(self, color, radius):
@@ -96,6 +110,7 @@ class AxisSystem(Shape):
         h = 0.4 * d
         b = .9
 
+        glDisable(GL_LIGHTING)
         colors = [(b, .2, .2), (.2, b, .2), (.2, .2, b)]
         vertices = [(r, 0., 0.), (r - d, h, -h), (r - d, -h, h),
                 (r, 0., 0.), (r - d, h, h), (r - d, -h, -h)]
@@ -110,3 +125,4 @@ class AxisSystem(Shape):
                 glColor3f(*color)
                 for v in vertices:
                     glVertex3f(*[v[replace[i]] for i in range(3)])
+        glEnable(GL_LIGHTING)

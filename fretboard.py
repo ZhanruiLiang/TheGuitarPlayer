@@ -39,6 +39,7 @@ class FretBoardSprite(FretBoard):
     def draw(self):
         glColor3f(0., 0., 0.)
         height = 0.002
+        glDisable(GL_LIGHTING)
         with utils.glPreserveMatrix():
             glMultMatrixf(utils.npmat_to_glmat(self.localMat))
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
@@ -71,6 +72,7 @@ class FretBoardSprite(FretBoard):
                     glVertex3f(x + d, y + d, 0)
                     glVertex3f(x - d, y - d, 0)
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
+        glEnable(GL_LIGHTING)
 
     def set_marks(self, marks:"[FretPos]"):
         self.marks = marks
