@@ -1,2 +1,2 @@
 map <F6> :!python3 %<CR>
-map <F5> :!pyrunner3 %<CR>
+map <F5> :!pyrunner3 controller.py<CR>

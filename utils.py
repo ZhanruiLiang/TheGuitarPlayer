@@ -26,3 +26,6 @@ def extract_pos(mat):
 def extract_pos3(mat):
     return (mat[0:3, 3] / mat[3, 3]).reshape(3)
 
+norm = lambda x:np.sqrt(x.dot(x))
+
+dot = np.dot

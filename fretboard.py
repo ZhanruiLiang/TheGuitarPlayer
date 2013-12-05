@@ -1,5 +1,7 @@
 from pyglet.gl import *
 import utils
+import numpy as np
+import config
 
 class FretPos:
     def __init__(self, stringIdx, fretIdx):
@@ -84,14 +86,17 @@ def make_bars(L, frets=20):
         xs[i] = (a - 1) / a * L + xs[i-1] / a
     return xs
 
-def plot_fretboard(L, frets=20):
-    xs = plot_fretboard(L, frets)
-    # TODO
-
 def test_make_bars():
     import numpy as np
     xs = make_bars(1, 20)
     assert np.allclose(xs[12], .5)
+
+fretSp = FretBoardSprite(np.array([
+    [1, 0, 0, 0 - config.x0],
+    [0, 0, 1, 0 - config.y0],
+    [0, -1, 0, 0 - config.z0],
+    [0, 0, 0, 1],
+    ]), top=.08, length=.90, bottom=.08, nFrets=19)
 
 if __name__ == '__main__':
     test_make_bars()
