@@ -27,7 +27,7 @@ class Link:
 class Joint:
     names = {}
 
-    def __init__(self, name, localMat, subJoints):
+    def __init__(self, name, localMat, range, subJoints):
         assert name not in Joint.names
         Joint.names[name] = self
 
@@ -37,8 +37,8 @@ class Joint:
         self._globalMat = None
         self._angle = 0
         self.angle = 0
+        self.range = range
         self.parent = None
-
 
     def __repr__(self):
         return 'Joint(name={})'.format(self.name)
@@ -80,6 +80,11 @@ class Joint:
                     if self.parent else self.localMat
         return self._globalMat
 
+    def traverse(self):
+        for link in self.links:
+            joint = link.child
+            yield from joint.traverse()
+
     @property
     def norm3(self):
         mat = self.globalMat
@@ -112,7 +117,7 @@ class Joint:
         self.update()
 
 class JointDOF2(Joint):
-    def __init__(self, name, localMat, subJoints):
+    def __init__(self, name, localMat, rangeY, rangeZ, subJoints):
         matY = np.array([
             [1, 0, 0, 0],
             [0, 0, 1, 0],
@@ -120,11 +125,12 @@ class JointDOF2(Joint):
             [0, 0, 0, 1]
             ])
         matYinv = np.linalg.inv(matY)
-        super().__init__(name+'y', dot(localMat, matY), [
-            Joint(name+'z', matYinv, subJoints)])
+        super().__init__(name+'y', dot(localMat, matY), rangeY, [
+            Joint(name+'z', matYinv, rangeZ, subJoints)])
 
 class JointDOF3(Joint):
-    def __init__(self, name, localMat, subJoints):
+    def __init__(self, name, localMat, rangeX, rangeY, rangeZ, subJoints):
+        assert isinstance(localMat, np.ndarray)
         matX = np.array([
             [0, 0, 1, 0],
             [1, 0, 0, 0],
@@ -132,6 +138,6 @@ class JointDOF3(Joint):
             [0, 0, 0, 1],
             ])
         matXinv = np.linalg.inv(matX)
-        super().__init__(name+'x', dot(localMat, matX), [
-            JointDOF2(name, matXinv, subJoints)])
+        super().__init__(name+'x', dot(localMat, matX), rangeX, [
+            JointDOF2(name, matXinv, rangeY, rangeZ, subJoints)])
 

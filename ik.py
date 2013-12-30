@@ -237,6 +237,13 @@ class ConstraintedSolver(SimpleSolver):
         super().__init__()
         self.constraints = []
 
+    def set_joints(self, root):
+        super().set_joints(root)
+        for joint in root.traverse():
+            if joint.range:
+                rangeL, rangeR = joint.range
+                self.set_constaints([RangeConstraint(joint.name, rangeL, rangeR, 1.)])
+
     def set_constaints(self, constraints):
         self.constraints.extend(constraints)
 

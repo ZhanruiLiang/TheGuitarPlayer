@@ -14,10 +14,10 @@ HB = 0.08 # width
 def make_hand():
     def make_finger(nameSuffix, mat, L2, L3, L4):
         i = str(nameSuffix)
-        return JointDOF2('MCP'+i, mat, [
-            Joint('PIP'+i, Joint.make_mat((L2, 0, 0), -Pi/6), [
-                Joint('DIP'+i, Joint.make_mat((L3, 0, 0), -Pi/6), [
-                    Joint('EP'+i, Joint.make_mat((L3, 0, 0), -Pi/6), [])
+        return JointDOF2('MCP'+i, mat, (-Pi/9, Pi/9), (-Pi/2, 0), [
+            Joint('PIP'+i, Joint.make_mat((L2, 0, 0), -Pi/6), (-Pi/2, 0), [
+                Joint('DIP'+i, Joint.make_mat((L3, 0, 0), -Pi/6), (-Pi/2, 0), [
+                    Joint('EP'+i, Joint.make_mat((L3, 0, 0), -Pi/6), None, [])
                 ])
             ])
         ])
@@ -33,8 +33,8 @@ def make_hand():
             [1, 0, 0, Larm],
             [0, 1, 0, 0],
             [0, 0, 1, 0],
-            [0, 0, 0, 1],
-        ]), [
+            [0, 0, 0, 1]]), 
+            None, None, None, [
             make_finger(i, Joint.make_mat(poss[i], 0.),
                 L2 * scales[i], L3 * scales[i], L4 * scales[i])
             for i in range(1, 5)
@@ -45,7 +45,7 @@ def make_hand():
             [1, 0, 0, .03 - config.y0 - Larm],
             [0, -1, 0, -config.z0],
             [0, 0, 0, 1],
-        ]), [hand])
+        ]), None, None, None, [hand])
 
     root = arm
     return root

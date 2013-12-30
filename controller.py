@@ -97,15 +97,6 @@ def setup_solver(solver):
             RefPosConstraint(joint.parent, pos, .8)
             ])
 
-    for i in range(1, 5):
-        # MCP, PIP, DIP, EP
-        i = str(i)
-        solver.set_constaints([
-            RangeConstraint(Joint.get('MCP'+i+'z'), -Pi/2, 0, 1.),
-            RangeConstraint(Joint.get('MCP'+i+'y'), -Pi/9, Pi/9, 1.),
-            RangeConstraint(Joint.get('PIP'+i), -Pi/2, 0, 1.),
-            RangeConstraint(Joint.get('DIP'+i), -Pi/2, 0, 1.),
-        ])
     # define constraints
     solver.set_constaints([
         # RefAngleConstraint(Joint.get('MCP1z'), -Pi/6, 1),

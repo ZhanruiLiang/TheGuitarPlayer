@@ -23,17 +23,15 @@ class JointSprite:
     LINK_COLOR = (.9, .9, .1, 1.)
     LINK_RADIUS = .004
 
-    def __init__(self, joint):
+    def __init__(self, root):
         super().__init__()
-        self._shapes = [JointSprite.cylinder]
-        self.joint = joint
-        self.links = [_joint.Link(self, JointSprite(x.child)) for x in joint.links]
+        self.root = root
 
     def __repr__(self):
         return repr(self.joint)
 
     def draw_link(self, link):
-        pos = link.child.joint.localPos3
+        pos = link.child.localPos3
         r = utils.norm(pos)
         if r < 1e-8:
             return
@@ -53,15 +51,17 @@ class JointSprite:
         #     glVertex3d(*pos)
         # glEnable(GL_LIGHTING)
 
-    def draw(self):
+    def draw_joint(self, joint):
         with utils.glPreserveMatrix():
-            mat = self.joint.localMat
+            mat = joint.localMat
             glMultMatrixf(utils.npmat_to_glmat(mat))
-            for shape in self._shapes:
-                shape.draw()
+            self.cylinder.draw()
             # draw links
-            for link in self.links:
+            for link in joint.links:
                 self.draw_link(link)
-                link.child.draw()
+                self.draw_joint(link.child)
+
+    def draw(self):
+        self.draw_joint(self.root)
 
 axisSp = ShapeSprite(model.axisSystem)

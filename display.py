@@ -62,9 +62,9 @@ class Display:
 
     def set_light(self):
         R = 1
-        glLightf(GL_LIGHT0, GL_POSITION, R, 0, 0)
-        glLightf(GL_LIGHT1, GL_POSITION, 0, R, 0)
-        glLightf(GL_LIGHT2, GL_POSITION, 0, 0, R)
+        # G.glLightf(GL_LIGHT0, GL_POSITION, R, 0, 0)
+        # G.glLightf(GL_LIGHT1, GL_POSITION, 0, R, 0)
+        # G.glLightf(GL_LIGHT2, GL_POSITION, 0, 0, R)
 
     def draw(self):
         # glViewport(0, 0, self.size[0], self.size[1])
